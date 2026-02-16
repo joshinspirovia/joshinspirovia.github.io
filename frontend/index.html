@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Josh Inspirovia · live from Firebase</title>
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <!-- Google Fonts: Inter & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <!-- Firebase SDK (modular) -->
+  <script type="module">
+    // Import Firebase
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js';
+    import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyCyEA4LKyZWc9EfPuI0m_1cQNumWsU1Tvw",
+      authDomain: "josh-inspirovia.firebaseapp.com",
+      projectId: "josh-inspirovia",
+      storageBucket: "josh-inspirovia.firebasestorage.app",
+      messagingSenderId: "551356397320",
+      appId: "1:551356397320:web:1a208800332a23be859ebd",
+      measurementId: "G-NHND7EVPSR"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getFirestore(app);
+
+    // DOM elements
+    const quoteEl = document.getElementById('quote-content');
+    const motivationEl = document.getElementById('motivation-content');
+    const poemEl = document.getElementById('poem-content');
+    const featuredContainer = document.getElementById('featured-items-container');
+    const pickerBtns = document.querySelectorAll('.picker-btn');
+    const featuredCountEl = document.getElementById('featured-count');
+    
+    // Read more links
+    const readMoreLinks = document.querySelectorAll('.read-more');
+
+    // Default fallback content
+    const defaultContent = {
+      quote: {
+        short: `"The best way to get started is to quit talking and begin doing." — Walt Disney`,
+        full: `"Success usually comes to those who are too busy to be looking for it." — Henry David Thoreau<br><br>
+        "Don't watch the clock; do what it does. Keep going." — Sam Levenson<br><br>
+        “Everything you’ve ever wanted is on the other side of fear.” — unknown`
+      },
+      motivation: {
+        short: `Every step forward, no matter how small, takes you closer to your dreams. Keep moving!`,
+        full: `Push yourself, because no one else is going to do it for you.<br><br>
+        The harder you work for something, the greater you'll feel when you achieve it.<br><br>
+        “You don’t have to be great to start, but you have to start to be great.” — Zig Ziglar`
+      },
+      poem: {
+        short: `Let the sunrise paint your hope,<br>Let the breeze carry your fears.`,
+        full: `In the quiet moments, find your light,<br>In every shadow, take your flight,<br>Hold onto dreams with all your might,<br>The dawn awaits beyond the night.<br><br>
+        Whispers of the wind, songs of the soul,<br>Every broken piece makes you whole,<br>Rise with the sun, set your goal,<br>Life’s a journey, take control.<br><br>
+        Breathe in peace, exhale the doubt,<br>You are more than you figure out.`
+      }
+    };
+
+    // Store loaded content
+    let firebaseContent = null;
+    let featuredItems = [];
+    let currentFilter = 'all'; // 'all', 'quote', 'motivation', 'poem'
+
+    // Load content from Firestore
+    async function loadContent() {
+      try {
+        // Load homepage main content
+        const docRef = doc(db, 'cms', 'homepageContent');
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          firebaseContent = docSnap.data();
+          applyMainContent();
+        } else {
+          console.log('No main content found, using defaults');
+          useDefaultMainContent();
+        }
+
+        // Load featured items from collection
+        await loadFeaturedItems();
+        
+      } catch (error) {
+        console.error('Error loading from Firebase:', error);
+        useDefaultMainContent();
+        loadDefaultFeaturedItems();
+      }
+    }
+
+    // Load featured items from the 'featured' collection (ordered by most recent first)
+    async function loadFeaturedItems() {
+      try {
+        const q = query(collection(db, 'featured'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        featuredItems = [];
+        querySnapshot.forEach((doc) => {
+          featuredItems.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        renderFeaturedItems();
+        updateFeaturedCount();
+        
+      } catch (error) {
+        console.error('Error loading featured items:', error);
+        loadDefaultFeaturedItems();
+      }
+    }
+
+    // Load default featured items for demo
+    function loadDefaultFeaturedItems() {
+      featuredItems = [
+        {
+          id: 'default1',
+          title: 'Timeless Quote',
+          text: '“The best way to get started is to quit talking and begin doing.”',
+          type: 'quote',
+          createdAt: { seconds: Date.now() / 1000 - 86400 } // 1 day ago
+        },
+        {
+          id: 'default2',
+          title: 'Daily Boost',
+          text: '“You don’t have to be great to start, but you have to start to be great.”',
+          type: 'motivation',
+          createdAt: { seconds: Date.now() / 1000 - 172800 } // 2 days ago
+        },
+        {
+          id: 'default3',
+          title: 'Poem Excerpt',
+          text: 'In the quiet moments, find your light, in every shadow, take your flight.',
+          type: 'poem',
+          createdAt: { seconds: Date.now() / 1000 - 259200 } // 3 days ago
+        },
+        {
+          id: 'default4',
+          title: 'Wisdom',
+          text: 'The journey of a thousand miles begins with a single step.',
+          type: 'quote',
+          createdAt: { seconds: Date.now() / 1000 - 345600 } // 4 days ago
+        },
+        {
+          id: 'default5',
+          title: 'Inspiration',
+          text: 'Believe you can and you\'re halfway there.',
+          type: 'motivation',
+          createdAt: { seconds: Date.now() / 1000 - 432000 } // 5 days ago
+        }
+      ];
+      renderFeaturedItems();
+      updateFeaturedCount();
+    }
+
+    // Render featured items based on current filter (vertical layout)
+    function renderFeaturedItems() {
+      if (!featuredContainer) return;
+      
+      const filteredItems = currentFilter === 'all' 
+        ? featuredItems 
+        : featuredItems.filter(item => item.type === currentFilter);
+      
+      if (filteredItems.length === 0) {
+        featuredContainer.innerHTML = `
+          <div class="no-featured-items">
+            <i class="fas fa-inbox"></i>
+            <p>No featured items found</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      filteredItems.forEach((item, index) => {
+        // Format date if available
+        let dateStr = 'Recently added';
+        if (item.createdAt && item.createdAt.seconds) {
+          const date = new Date(item.createdAt.seconds * 1000);
+          const now = new Date();
+          const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays === 0) {
+            dateStr = 'Today';
+          } else if (diffDays === 1) {
+            dateStr = 'Yesterday';
+          } else {
+            dateStr = `${diffDays} days ago`;
+          }
+        }
+
+        html += `
+          <div class="featured-item-card" data-id="${item.id}">
+            <div class="featured-item-header">
+              <span class="featured-item-type ${item.type}">
+                <i class="fas ${getTypeIcon(item.type)}"></i> ${item.type}
+              </span>
+              <span class="featured-item-date"><i class="far fa-clock"></i> ${dateStr}</span>
+            </div>
+            <h3 class="featured-item-title">${item.title || 'Untitled'}</h3>
+            <p class="featured-item-text">${item.text || ''}</p>
+            <div class="featured-item-footer">
+              <span class="featured-item-id">ID: ${item.id.substring(0, 8)}...</span>
+            </div>
+          </div>
+        `;
+      });
+      
+      featuredContainer.innerHTML = html;
+    }
+
+    // Get icon for type
+    function getTypeIcon(type) {
+      switch(type) {
+        case 'quote': return 'fa-quote-right';
+        case 'motivation': return 'fa-bolt';
+        case 'poem': return 'fa-feather-alt';
+        default: return 'fa-crown';
+      }
+    }
+
+    // Update featured count
+    function updateFeaturedCount() {
+      if (featuredCountEl) {
+        const count = currentFilter === 'all' 
+          ? featuredItems.length 
+          : featuredItems.filter(item => item.type === currentFilter).length;
+        featuredCountEl.textContent = count;
+      }
+    }
+
+    // Apply main content
+    function applyMainContent() {
+      if (!firebaseContent) return;
+
+      // Quote
+      if (firebaseContent.quote) {
+        if (firebaseContent.quote.short) {
+          quoteEl.innerHTML = firebaseContent.quote.short;
+        }
+        if (firebaseContent.quote.full) {
+          quoteEl.setAttribute('data-full', firebaseContent.quote.full);
+        }
+      }
+
+      // Motivation
+      if (firebaseContent.motivation) {
+        if (firebaseContent.motivation.short) {
+          motivationEl.innerHTML = firebaseContent.motivation.short;
+        }
+        if (firebaseContent.motivation.full) {
+          motivationEl.setAttribute('data-full', firebaseContent.motivation.full);
+        }
+      }
+
+      // Poem
+      if (firebaseContent.poem) {
+        if (firebaseContent.poem.short) {
+          poemEl.innerHTML = firebaseContent.poem.short;
+        }
+        if (firebaseContent.poem.full) {
+          poemEl.setAttribute('data-full', firebaseContent.poem.full);
+        }
+      }
+    }
+
+    // Use default main content
+    function useDefaultMainContent() {
+      quoteEl.innerHTML = defaultContent.quote.short;
+      quoteEl.setAttribute('data-full', defaultContent.quote.full);
+      
+      motivationEl.innerHTML = defaultContent.motivation.short;
+      motivationEl.setAttribute('data-full', defaultContent.motivation.full);
+      
+      poemEl.innerHTML = defaultContent.poem.short;
+      poemEl.setAttribute('data-full', defaultContent.poem.full);
+    }
+
+    // Toggle read more/less
+    function toggleReadMore(e) {
+      const link = e.currentTarget;
+      const section = link.getAttribute('data-section');
+      const contentEl = document.getElementById(section + '-content');
+      const span = link.querySelector('span');
+      const fullContent = contentEl.getAttribute('data-full');
+
+      if (span.innerText === 'Read More') {
+        contentEl.innerHTML = fullContent;
+        span.innerText = 'Read Less';
+      } else {
+        const shortVersion = firebaseContent?.[section]?.short || defaultContent[section].short;
+        contentEl.innerHTML = shortVersion;
+        span.innerText = 'Read More';
+      }
+    }
+
+    // Initialize page
+    loadContent();
+
+    // Attach read more listeners
+    setTimeout(() => {
+      readMoreLinks.forEach(link => {
+        link.addEventListener('click', toggleReadMore);
+      });
+    }, 500);
+
+    // Featured picker filter
+    pickerBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.featured;
+        currentFilter = type;
+        
+        pickerBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        renderFeaturedItems();
+        updateFeaturedCount();
+      });
+    });
+
+    // Smooth scroll and mobile toggle
+    document.querySelectorAll('.main-nav a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetId = this.getAttribute('href').substring(1);
+        const targetElement = document.getElementById(targetId);
+        if (targetElement) {
+          targetElement.scrollIntoView({ behavior: 'smooth' });
+        }
+        if (window.innerWidth <= 768) {
+          document.getElementById('mainNav').classList.remove('open');
+        }
+      });
+    });
+
+    // Hamburger toggle
+    const toggleBtn = document.getElementById('menuToggle');
+    const nav = document.getElementById('mainNav');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        nav.classList.toggle('open');
+        const icon = toggleBtn.querySelector('i');
+        if (nav.classList.contains('open')) {
+          icon.classList.remove('fa-bars');
+          icon.classList.add('fa-times');
+        } else {
+          icon.classList.remove('fa-times');
+          icon.classList.add('fa-bars');
+        }
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        nav.classList.remove('open');
+        const icon = toggleBtn?.querySelector('i');
+        if (icon) {
+          icon.classList.remove('fa-times');
+          icon.classList.add('fa-bars');
+        }
+      }
+    });
+  </script>
+  <style>
+    /* ----- RESET & BASE ----- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', 'Georgia', serif;
+      background: #f5f5f5;
+      color: #333;
+      line-height: 1.6;
+      padding-top: 90px;
+    }
+
+    /* ----- FIXED HEADER ----- */
+    .site-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 8px 30px;
+      border-bottom: 2px solid #00796b;
+      flex-wrap: wrap;
+      z-index: 1000;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-image {
+      width: 70px;
+      height: 56px;
+      object-fit: contain;
+    }
+
+    /* ----- HAMBURGER TOGGLE ----- */
+    .menu-toggle {
+      display: none;
+      font-size: 2rem;
+      background: none;
+      border: none;
+      color: #00796b;
+      cursor: pointer;
+      transition: color 0.2s;
+      padding: 0 10px;
+    }
+    .menu-toggle:hover {
+      color: #004d40;
+    }
+
+    /* ----- NAVIGATION ----- */
+    .main-nav ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      align-items: center;
+    }
+
+    .main-nav a {
+      text-decoration: none;
+      color: black;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .main-nav a:hover {
+      text-decoration: underline;
+      color: #00796b;
+    }
+
+    .signup-btn {
+      padding: 6px 14px;
+      background-color: gray;
+      color: white !important;
+      border-radius: 4px;
+      transition: background-color 0.3s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .signup-btn:hover {
+      background-color: #555;
+      text-decoration: none !important;
+    }
+
+    /* ----- HERO ----- */
+    .hero-text {
+      position: relative;
+      background-image: url('Background image 1.png');
+      background-size: cover;
+      background-position: center;
+      height: 55vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: black;
+      margin-bottom: 40px;
+    }
+
+    .hero-overlay {
+      background-color: transparent;
+      padding: 30px;
+      border-radius: 10px;
+      animation: fadeIn 1.2s ease;
+    }
+
+    .hero-text h1 {
+      font-size: 5em;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+
+    .hero-text p {
+      font-size: 1.5em;
+      font-style: italic;
+      color: #ddd;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ----- MAIN (cards) ----- */
+    main {
+      max-width: 1400px;
+      margin: 0 auto 3rem;
+      padding: 0 5%;
+    }
+
+    .daily-sections {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      justify-content: center;
+    }
+
+    .daily-sections > section {
+      flex: 1 1 280px;
+      background: #ffffff;
+      border-radius: 28px;
+      padding: 2rem 1.8rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 50, 40, 0.08), 0 8px 10px -6px rgba(0,0,0,0.02);
+      border: 1px solid rgba(0, 121, 107, 0.1);
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .daily-sections > section:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 25px 30px -12px rgba(0, 100, 80, 0.18);
+      border-color: #c49a6c;
+    }
+
+    .daily-sections > section::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 8px;
+      height: 70px;
+      background: linear-gradient(to bottom, #c49a6c, #00796b);
+      border-radius: 0 0 8px 0;
+    }
+
+    section h2 {
+      font-size: 1.8rem;
+      margin-bottom: 1.2rem;
+      color: #0f3d3e;
+      font-family: 'Space Grotesk', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    section h2 i {
+      color: #c49a6c;
+      font-size: 1.8rem;
+    }
+
+    blockquote {
+      font-style: italic;
+      color: #2c3e4f;
+      padding-left: 1.5rem;
+      border-left: 4px solid #c49a6c;
+      margin: 1rem 0;
+      font-size: 1.1rem;
+    }
+
+    #motivation-content, #poem-content {
+      font-size: 1.1rem;
+      color: #2c3e4f;
+    }
+
+    /* ----- READ MORE ----- */
+    .read-more {
+      align-self: flex-start;
+      margin-top: 1.8rem;
+      background: rgba(196, 154, 108, 0.08);
+      padding: 0.5rem 1.8rem;
+      border-radius: 40px;
+      color: #0f3d3e;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-decoration: none;
+      border: 1px solid rgba(15, 61, 62, 0.15);
+      transition: all 0.25s ease;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .read-more i {
+      font-size: 0.85rem;
+      transition: transform 0.2s;
+    }
+
+    .read-more:hover {
+      background: #0f3d3e;
+      color: white;
+      border-color: #0f3d3e;
+      gap: 10px;
+    }
+
+    .read-more:hover i {
+      transform: translateX(4px);
+      color: white;
+    }
+
+    .separator {
+      margin: 1.8rem 0 1.5rem;
+      border-top: 2px dashed goldenrod;
+      opacity: 0.6;
+    }
+
+    /* ===== FEATURED SECTION ===== */
+    .featured-section {
+      max-width: 1000px;
+      margin: 0 auto 3rem;
+      padding: 0 5%;
+    }
+
+    .featured-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .featured-header h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2.2rem;
+      color: #004d40;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .featured-header h2 i {
+      color: #c49a6c;
+    }
+
+    .featured-stats {
+      background: rgba(196, 154, 108, 0.1);
+      padding: 0.5rem 1.5rem;
+      border-radius: 60px;
+      color: #0f3d3e;
+      font-weight: 600;
+    }
+
+    /* ----- FILTER PICKER (OUTSIDE CONTAINER) ----- */
+    .featured-filter {
+      margin-bottom: 2rem;
+    }
+
+    .featured-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .picker-btn {
+      background: white;
+      border: 2px solid #e4f0ec;
+      color: #1e5e58;
+      padding: 0.8rem 2rem;
+      border-radius: 60px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+
+    .picker-btn:hover {
+      background: #f0f9f6;
+      border-color: #c49a6c;
+    }
+
+    .picker-btn.active {
+      background: #004d40;
+      color: white;
+      border-color: #004d40;
+    }
+
+    /* ----- FEATURED ITEMS CONTAINER (vertical stack) ----- */
+    .featured-items-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .featured-item-card {
+      background: white;
+      border-radius: 28px;
+      padding: 2rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 50, 40, 0.08);
+      border: 1px solid rgba(0, 121, 107, 0.1);
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .featured-item-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 30px -12px rgba(0, 100, 80, 0.18);
+      border-color: #c49a6c;
+    }
+
+    .featured-item-card::before {
+      content: '“';
+      position: absolute;
+      top: -20px;
+      right: 20px;
+      font-size: 8rem;
+      font-family: 'Space Grotesk', serif;
+      color: rgba(196, 154, 108, 0.1);
+      line-height: 1;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .featured-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .featured-item-type {
+      padding: 0.4rem 1.2rem;
+      border-radius: 40px;
+      font-weight: 600;
+      text-transform: capitalize;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .featured-item-type.quote {
+      background: #e3f2fd;
+      color: #0d47a1;
+    }
+
+    .featured-item-type.motivation {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .featured-item-type.poem {
+      background: #f3e5f5;
+      color: #4a148c;
+    }
+
+    .featured-item-date {
+      color: #6b8a84;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: #f0f7f5;
+      padding: 0.3rem 1rem;
+      border-radius: 40px;
+    }
+
+    .featured-item-title {
+      font-size: 1.8rem;
+      font-family: 'Space Grotesk', sans-serif;
+      color: #004d40;
+      margin-bottom: 1rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .featured-item-text {
+      color: #2c3e4f;
+      line-height: 1.8;
+      font-style: italic;
+      margin-bottom: 1.5rem;
+      position: relative;
+      z-index: 1;
+      font-size: 1.2rem;
+      padding-left: 1rem;
+      border-left: 3px solid #c49a6c;
+    }
+
+    .featured-item-footer {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: #8aa39e;
+      border-top: 1px dashed #e4f0ec;
+      padding-top: 1rem;
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .featured-item-id {
+      font-family: monospace;
+      background: #f0f7f5;
+      padding: 0.3rem 0.8rem;
+      border-radius: 20px;
+    }
+
+    .no-featured-items {
+      text-align: center;
+      color: #6b8a84;
+      font-style: italic;
+      padding: 4rem 2rem;
+      background: white;
+      border-radius: 40px;
+      border: 2px dashed #e4f0ec;
+    }
+
+    .no-featured-items i {
+      font-size: 3rem;
+      color: #c49a6c;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    /* ----- FOOTER ----- */
+    footer {
+      background-color: #2f4f4f;
+      color: #eee;
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.9em;
+      padding: 20px;
+      border-top: none;
+    }
+
+    /* ===== MOBILE STYLES ===== */
+    @media (max-width: 768px) {
+      body {
+        padding-top: 80px;
+      }
+
+      .site-header {
+        padding: 10px 20px;
+      }
+
+      .menu-toggle {
+        display: block;
+      }
+
+      .main-nav {
+        width: 100%;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.4s ease-in-out;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(8px);
+        border-radius: 0 0 20px 20px;
+        margin-top: 10px;
+        box-shadow: 0 10px 15px -8px rgba(0,0,0,0.1);
+      }
+
+      .main-nav.open {
+        max-height: 500px;
+      }
+
+      .main-nav ul {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+        width: 100%;
+        padding: 10px 0 20px 0;
+      }
+
+      .main-nav li {
+        width: 100%;
+      }
+
+      .main-nav a {
+        width: 100%;
+        padding: 14px 20px;
+        border-bottom: 1px solid rgba(0,121,107,0.1);
+        justify-content: flex-start;
+      }
+
+      .signup-btn {
+        margin: 8px 20px;
+        width: auto;
+        display: inline-block;
+        text-align: center;
+      }
+
+      .hero-text {
+        height: 40vh;
+      }
+
+      .hero-text h1 {
+        font-size: 2.2em;
+      }
+
+      .daily-sections {
+        flex-direction: column;
+      }
+
+      .featured-header {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .featured-picker {
+        flex-direction: column;
+      }
+      
+      .picker-btn {
+        width: 100%;
+      }
+      
+      .featured-item-title {
+        font-size: 1.5rem;
+      }
+      
+      .featured-item-text {
+        font-size: 1rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .logo-image {
+        width: 60px;
+        height: 48px;
+      }
+      .hero-text h1 {
+        font-size: 2em;
+      }
+      .featured-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+    }
+    /* Hide the Editor's Choice header and stats */
+.featured-header {
+    display: none !important;
+}
+
+/* Remove body padding that was pushing content down */
+body {
+    padding-top: 0 !important;
+}
+
+/* Add margin-top to hero to offset fixed header height */
+.hero-text {
+    margin-top: 74px !important; /* Adjust this value if your header height is different */
+}
+
+/* For mobile, adjust the margin */
+@media (max-width: 768px) {
+    .hero-text {
+        margin-top: 70px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-text {
+        margin-top: 60px !important;
+    }
+}
+  </style>
+</head>
+<body>
+  <!-- FIXED HEADER with hamburger toggle -->
+  <header class="site-header">
+    <div class="logo-container">
+      <img src="logo.png" alt="Josh Inspirovia Logo" class="logo-image" />
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">
+      <i class="fas fa-bars"></i>
+    </button>
+    <nav class="main-nav" id="mainNav">
+      <ul>
+        <li><a href="#hero"><i class="fas fa-home"></i>Home</a></li>
+        <li><a href="#quote-section"><i class="fas fa-quote-right"></i>Quotes</a></li>
+        <li><a href="#motivation-section"><i class="fas fa-bolt"></i>Motivations</a></li>
+        <li><a href="#poem-section"><i class="fas fa-feather-alt"></i>Poems</a></li>
+        <li><a href="#featured-section"><i class="fas fa-crown"></i>Featured</a></li>
+        <li><a href="about.html"><i class="fas fa-user"></i>About</a></li>
+        <li><a href="login.html" class="signup-btn"><i class="fas fa-key"></i>Login</a></li>
+        <li><a href="signup.html" class="signup-btn"><i class="fas fa-pen-fancy"></i>Sign Up</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <!-- Hero section -->
+  <section id="hero" class="hero-text">
+    <div class="hero-overlay">
+      <h1>Josh Inspirovia</h1>
+      <p>Fuel for the soul — One word at a time.</p>
+    </div>
+  </section>
+
+  <main>
+    <div class="daily-sections">
+      <section id="quote-section" class="highlight quote-of-the-day">
+        <h2><i class="fas fa-quote-right"></i> Quote of the Day</h2>
+        <blockquote id="quote-content"></blockquote>
+        <a href="javascript:void(0)" class="read-more" data-section="quote"><span>Read More</span> <i class="fas fa-arrow-right"></i></a>
+      </section>
+      <section id="motivation-section" class="motivation">
+        <h2><i class="fas fa-bolt"></i> Daily Motivation</h2>
+        <p id="motivation-content"></p>
+        <a href="javascript:void(0)" class="read-more" data-section="motivation"><span>Read More</span> <i class="fas fa-arrow-right"></i></a>
+      </section>
+      <section id="poem-section" class="poem">
+        <h2><i class="fas fa-feather-alt"></i> Today's Poem</h2>
+        <p id="poem-content"></p>
+        <a href="javascript:void(0)" class="read-more" data-section="poem"><span>Read More</span> <i class="fas fa-arrow-right"></i></a>
+      </section>
+    </div>
+  </main>
+
+  <!-- FEATURED SECTION with picker outside and vertical cards -->
+  <section id="featured-section" class="featured-section">
+    <div class="featured-header">
+      <h2><i class="fas fa-crown" style="color: #c49a6c;"></i> Editor's Choice</h2>
+      <div class="featured-stats">
+        <i class="fas fa-layer-group"></i> <span id="featured-count">0</span> items
+      </div>
+    </div>
+
+    <!-- FILTER PICKER - OUTSIDE the container -->
+    <div class="featured-filter">
+      <div class="featured-picker">
+        <button class="picker-btn active" data-featured="all">🏆 All</button>
+        <button class="picker-btn" data-featured="quote">💬 Quotes</button>
+        <button class="picker-btn" data-featured="motivation">⚡ Motivation</button>
+        <button class="picker-btn" data-featured="poem">🪶 Poems</button>
+      </div>
+    </div>
+
+    <!-- FEATURED ITEMS CONTAINER - Vertical stack (most recent first) -->
+    <div id="featured-items-container" class="featured-items-container">
+      <!-- Items will be dynamically loaded here -->
+    </div>
+  </section>
+
+  <footer>
+    <p>&copy; 2025 Josh Inspirovia. All rights reserved. — live from Firebase</p>
+  </footer>
+</body>
+</html>

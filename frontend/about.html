@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About | Josh Inspirovia</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .about-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      line-height: 1.8;
+      color: #333;
+    }
+
+    .about-container h1, .about-container h2 {
+      color: #00796b;
+    }
+
+    .about-container p {
+      margin-bottom: 20px;
+    }
+
+    .section-separator {
+      border-top: 2px solid goldenrod;
+      margin: 40px 0;
+    }
+
+    .profile-picture {
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 50%;
+      margin-bottom: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .owner-section, .developers-section {
+      text-align: center;
+    }
+
+    .developers-list {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .developer-item {
+      max-width: 180px;
+      text-align: center;
+    }
+
+    .developer-item img {
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 50%;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      margin-bottom: 10px;
+    }
+
+    .developer-item strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #00796b;
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="logo-container">
+      <img src="logo.png" alt="Josh Inspirovia Logo" class="logo-image" />
+    </div>
+    <nav class="main-nav">
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="#">Quotes</a></li>
+        <li><a href="#">Motivations</a></li>
+        <li><a href="#">Poems</a></li>
+        <li><a href="login.html" class="signup-btn">Login</a></li>
+        <li><a href="signup.html" class="signup-btn">Sign Up</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="about-container">
+      <h1>About Josh Inspirovia</h1>
+      <p><strong>Josh Inspirovia</strong> is a hub for daily inspiration, motivation, and poetic expression. We aim to enrich lives through meaningful words that resonate with the soul and stir inner strength. From quotes to poems, each piece is handpicked to help you reflect, rise, and thrive.</p>
+
+      <div class="section-separator"></div>
+
+      <div class="owner-section">
+        <h2>About the Owner</h2>
+        <img src="joshua-tettey.jpg" alt="Joshua Tettey" class="profile-picture" />
+        <p><strong>Joshua Tettey</strong> is the visionary behind Josh Inspirovia. With a heart for emotional growth and a talent for expressing deep truths through words, Joshua built this platform to uplift others — one phrase at a time.</p>
+      </div>
+
+      <div class="section-separator"></div>
+
+      <div class="developers-section">
+        <h2>The Developers</h2>
+        <p>This site was built with dedication by:</p>
+        <ul class="developers-list">
+          <li class="developer-item">
+            <img src="joshua-tettey.jpg" alt="Joshua Tettey" />
+            <strong>Joshua Tettey</strong>
+            Founder, Lead Developer & Designer
+          </li>
+          <li class="developer-item">
+            <img src="rence-blunt.jpg" alt="Rence Blunt" />
+            <strong>Rence Blunt</strong>
+            Backend & Systems Developer
+          </li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 Josh Inspirovia. All rights reserved.</p>
+  </footer>
+</body>
+</html>

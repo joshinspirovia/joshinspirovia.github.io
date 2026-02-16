@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Featured · Josh Inspirovia</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f0f5f4;
+      color: #153b3a;
+      padding: 2rem;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2.5rem;
+      color: #004d40;
+      margin-bottom: 0.5rem;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 2rem;
+      color: #2f5e5b;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .back-link:hover { color: #c49a6c; }
+    .card {
+      background: white;
+      border-radius: 40px;
+      padding: 2rem;
+      box-shadow: 0 15px 30px -10px #194e4a1a;
+      border: 1px solid #c49a6c30;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .field label {
+      font-weight: 600;
+      color: #1e5e58;
+      font-size: 1.1rem;
+    }
+    .field input, .field textarea, .field select {
+      padding: 1rem;
+      border: 2px solid #dae9e5;
+      border-radius: 24px;
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+    }
+    .field textarea { 
+      min-height: 150px; 
+      resize: vertical;
+    }
+    .field input:focus, .field textarea:focus, .field select:focus {
+      outline: none;
+      border-color: #c49a6c;
+    }
+    .btn {
+      background: #004d40;
+      color: white;
+      border: none;
+      padding: 1rem 2.5rem;
+      border-radius: 60px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: 0.2s;
+      width: 100%;
+    }
+    .btn:hover { background: #0b6b5e; }
+    .btn-secondary {
+      background: #6c757d;
+      margin-top: 1rem;
+    }
+    .message {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border-radius: 60px;
+      text-align: center;
+      font-weight: 600;
+    }
+    .message.success { 
+      background: #c8f0e4; 
+      color: #005f4e; 
+    }
+    .message.error { 
+      background: #ffe1de; 
+      color: #aa3030; 
+    }
+    .info-box {
+      background: #e8f4f0;
+      border-radius: 24px;
+      padding: 1rem;
+      margin-bottom: 2rem;
+      color: #2f5e5b;
+      font-size: 0.95rem;
+      border-left: 4px solid #c49a6c;
+    }
+    .form-footer {
+      margin-top: 2rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="admin.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    <h1><i class="fas fa-crown" style="color: #c49a6c;"></i> Add Featured Item</h1>
+    
+    <div class="info-box">
+      <i class="fas fa-info-circle"></i> 
+      This form will create a new featured item in the database with an auto-generated ID.
+    </div>
+    
+    <div class="card">
+      <form id="featuredForm">
+        <div class="field">
+          <label><i class="fas fa-heading"></i> Title</label>
+          <input type="text" id="title" placeholder="e.g., Timeless Quote, Daily Inspiration, etc." required />
+        </div>
+        
+        <div class="field">
+          <label><i class="fas fa-tag"></i> Type</label>
+          <select id="type" required>
+            <option value="">Select type...</option>
+            <option value="quote">Quote</option>
+            <option value="motivation">Motivation</option>
+            <option value="poem">Poem</option>
+            <option value="story">Story</option>
+            <option value="wisdom">Wisdom</option>
+          </select>
+        </div>
+        
+        <div class="field">
+          <label><i class="fas fa-paragraph"></i> Content</label>
+          <textarea id="content" placeholder="Write your featured content here..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn" id="submitBtn">
+          <i class="fas fa-cloud-upload-alt"></i> Publish New Featured Item
+        </button>
+      </form>
+
+      <div id="message" class="message" style="display: none;"></div>
+
+      <div class="form-footer">
+        <button class="btn btn-secondary" id="clearBtn">
+          <i class="fas fa-eraser"></i> Clear Form
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { 
+      getFirestore, collection, addDoc, serverTimestamp 
+    } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCyEA4LKyZWc9EfPuI0m_1cQNumWsU1Tvw",
+      authDomain: "josh-inspirovia.firebaseapp.com",
+      projectId: "josh-inspirovia",
+      storageBucket: "josh-inspirovia.firebasestorage.app",
+      messagingSenderId: "551356397320",
+      appId: "1:551356397320:web:1a208800332a23be859ebd"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const form = document.getElementById('featuredForm');
+    const titleInput = document.getElementById('title');
+    const typeSelect = document.getElementById('type');
+    const contentTextarea = document.getElementById('content');
+    const submitBtn = document.getElementById('submitBtn');
+    const messageDiv = document.getElementById('message');
+    const clearBtn = document.getElementById('clearBtn');
+
+    // Check authentication
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = 'admin.html';
+      }
+    });
+
+    // Handle form submission
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      // Disable button to prevent double submission
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing...';
+      
+      // Hide any previous message
+      messageDiv.style.display = 'none';
+      messageDiv.className = 'message';
+      
+      try {
+        // Create new document in 'featured' collection
+        const docRef = await addDoc(collection(db, 'featured'), {
+          title: titleInput.value.trim(),
+          type: typeSelect.value,
+          text: contentTextarea.value.trim(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Show success message with the new document ID
+        messageDiv.textContent = `✅ Success! New featured item created with ID: ${docRef.id}`;
+        messageDiv.className = 'message success';
+        messageDiv.style.display = 'block';
+        
+        // Clear the form
+        form.reset();
+        
+      } catch (error) {
+        console.error('Error adding document: ', error);
+        messageDiv.textContent = '❌ Error: ' + error.message;
+        messageDiv.className = 'message error';
+        messageDiv.style.display = 'block';
+      } finally {
+        // Re-enable button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Publish New Featured Item';
+      }
+    });
+
+    // Clear form button
+    clearBtn.addEventListener('click', () => {
+      form.reset();
+      messageDiv.style.display = 'none';
+    });
+
+    // Auto-hide message after 5 seconds on success
+    messageDiv.addEventListener('click', () => {
+      messageDiv.style.display = 'none';
+    });
+  </script>
+</body>
+</html>

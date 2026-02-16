@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Josh Inspirovia · Admin Selection</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getFirestore, collection, getDocs, query, orderBy, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCyEA4LKyZWc9EfPuI0m_1cQNumWsU1Tvw",
+            authDomain: "josh-inspirovia.firebaseapp.com",
+            projectId: "josh-inspirovia",
+            storageBucket: "josh-inspirovia.firebasestorage.app",
+            messagingSenderId: "551356397320",
+            appId: "1:551356397320:web:1a208800332a23be859ebd",
+            measurementId: "G-NHND7EVPSR"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // DOM Elements
+        const itemsContainer = document.getElementById('items-container');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const selectedQuote = document.getElementById('selected-quote');
+        const selectedMotivation = document.getElementById('selected-motivation');
+        const selectedPoem = document.getElementById('selected-poem');
+        const saveBtn = document.getElementById('save-selection');
+        const statusMsg = document.getElementById('status-message');
+
+        // Store all items
+        let allItems = [];
+        let currentFilter = 'all';
+        
+        // Currently selected items
+        let selections = {
+            quote: null,
+            motivation: null,
+            poem: null
+        };
+
+        // Load items from Firebase
+        async function loadItems() {
+            try {
+                showStatus('Loading items...', 'info');
+                
+                const q = query(collection(db, 'featured'), orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                
+                allItems = [];
+                querySnapshot.forEach((doc) => {
+                    allItems.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                renderItems();
+                updateSelectors();
+                showStatus(`Loaded ${allItems.length} items`, 'success');
+                
+            } catch (error) {
+                console.error('Error loading items:', error);
+                showStatus('Error loading items from Firebase', 'error');
+                loadSampleData();
+            }
+        }
+
+        // Load sample data if Firebase fails
+        function loadSampleData() {
+            allItems = [
+                {
+                    id: 'sample1',
+                    title: 'The Power of Now',
+                    text: 'Realize deeply that the present moment is all you ever have.',
+                    type: 'quote',
+                    author: 'Eckhart Tolle'
+                },
+                {
+                    id: 'sample2',
+                    title: 'Daily Push',
+                    text: 'The only way to do great work is to love what you do.',
+                    type: 'motivation',
+                    author: 'Steve Jobs'
+                },
+                {
+                    id: 'sample3',
+                    title: 'Morning Light',
+                    text: 'The sunrise paints the sky, a new beginning waits for you.',
+                    type: 'poem'
+                },
+                {
+                    id: 'sample4',
+                    title: 'Wisdom',
+                    text: 'It does not matter how slowly you go as long as you do not stop.',
+                    type: 'quote',
+                    author: 'Confucius'
+                },
+                {
+                    id: 'sample5',
+                    title: 'Keep Going',
+                    text: 'Our greatest glory is not in never falling, but in rising every time we fall.',
+                    type: 'motivation',
+                    author: 'Confucius'
+                }
+            ];
+            
+            renderItems();
+            updateSelectors();
+            showStatus('Using sample data (Firebase connection failed)', 'warning');
+        }
+
+        // Render items based on filter
+        function renderItems() {
+            const filtered = currentFilter === 'all' 
+                ? allItems 
+                : allItems.filter(item => item.type === currentFilter);
+            
+            if (filtered.length === 0) {
+                itemsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>No items found</p>
+                    </div>
+                `;
+                return;
+            }
+
+            itemsContainer.innerHTML = filtered.map(item => `
+                <div class="item-card ${isSelected(item) ? 'selected' : ''}" data-id="${item.id}">
+                    <div class="item-type ${item.type}">
+                        <i class="fas ${getTypeIcon(item.type)}"></i> ${item.type}
+                    </div>
+                    <h3 class="item-title">${item.title || 'Untitled'}</h3>
+                    <p class="item-text">${item.text || ''}</p>
+                    ${item.author ? `<div class="item-author">— ${item.author}</div>` : ''}
+                    <div class="item-actions">
+                        <button class="select-btn" onclick="window.selectItem('${item.id}')">
+                            <i class="fas fa-check-circle"></i> Select as...
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Check if item is selected for any category
+        function isSelected(item) {
+            return Object.values(selections).some(sel => sel?.id === item.id);
+        }
+
+        // Get icon for type
+        function getTypeIcon(type) {
+            switch(type) {
+                case 'quote': return 'fa-quote-right';
+                case 'motivation': return 'fa-bolt';
+                case 'poem': return 'fa-feather-alt';
+                default: return 'fa-crown';
+            }
+        }
+
+        // Update selector dropdowns
+        function updateSelectors() {
+            // Filter items by type
+            const quotes = allItems.filter(item => item.type === 'quote');
+            const motivations = allItems.filter(item => item.type === 'motivation');
+            const poems = allItems.filter(item => item.type === 'poem');
+
+            // Update Quote selector
+            selectedQuote.innerHTML = `
+                <option value="">Select a quote...</option>
+                ${quotes.map(item => `
+                    <option value="${item.id}" ${selections.quote?.id === item.id ? 'selected' : ''}>
+                        ${item.title || item.text.substring(0, 50)}...
+                    </option>
+                `).join('')}
+            `;
+
+            // Update Motivation selector
+            selectedMotivation.innerHTML = `
+                <option value="">Select motivation...</option>
+                ${motivations.map(item => `
+                    <option value="${item.id}" ${selections.motivation?.id === item.id ? 'selected' : ''}>
+                        ${item.title || item.text.substring(0, 50)}...
+                    </option>
+                `).join('')}
+            `;
+
+            // Update Poem selector
+            selectedPoem.innerHTML = `
+                <option value="">Select a poem...</option>
+                ${poems.map(item => `
+                    <option value="${item.id}" ${selections.poem?.id === item.id ? 'selected' : ''}>
+                        ${item.title || item.text.substring(0, 50)}...
+                    </option>
+                `).join('')}
+            `;
+        }
+
+        // Handle item selection from dropdown
+        window.selectItemFromDropdown = function(type, itemId) {
+            const item = allItems.find(i => i.id === itemId);
+            if (!item) return;
+            
+            selections[type] = item;
+            renderItems();
+            showStatus(`Selected "${item.title || item.text.substring(0, 30)}..." as ${type} of the day`, 'success');
+        };
+
+        // Handle item selection from card
+        window.selectItem = function(itemId) {
+            const item = allItems.find(i => i.id === itemId);
+            if (!item) return;
+
+            // Show selection dialog
+            const type = prompt(`Select type for "${item.title || item.text.substring(0, 30)}...":\n1. Quote\n2. Motivation\n3. Poem`, "1");
+            
+            if (type === '1' && item.type === 'quote') {
+                selections.quote = item;
+            } else if (type === '2' && item.type === 'motivation') {
+                selections.motivation = item;
+            } else if (type === '3' && item.type === 'poem') {
+                selections.poem = item;
+            } else {
+                alert(`This item is type "${item.type}" and can only be selected for that category.`);
+                return;
+            }
+
+            updateSelectors();
+            renderItems();
+            showStatus(`Selected as ${item.type} of the day`, 'success');
+        };
+
+        // Save selections to Firebase
+        async function saveSelections() {
+            try {
+                showStatus('Saving selections...', 'info');
+                
+                // Update homepage content in Firebase
+                const homepageRef = doc(db, 'cms', 'homepageContent');
+                
+                const homepageData = {
+                    quote: {
+                        short: selections.quote ? selections.quote.text : '',
+                        full: selections.quote ? selections.quote.text + (selections.quote.author ? `<br><br>— ${selections.quote.author}` : '') : '',
+                        selectedId: selections.quote ? selections.quote.id : null
+                    },
+                    motivation: {
+                        short: selections.motivation ? selections.motivation.text : '',
+                        full: selections.motivation ? selections.motivation.text + (selections.motivation.author ? `<br><br>— ${selections.motivation.author}` : '') : '',
+                        selectedId: selections.motivation ? selections.motivation.id : null
+                    },
+                    poem: {
+                        short: selections.poem ? selections.poem.text : '',
+                        full: selections.poem ? selections.poem.text : '',
+                        selectedId: selections.poem ? selections.poem.id : null
+                    },
+                    lastUpdated: new Date().toISOString()
+                };
+
+                await updateDoc(homepageRef, homepageData);
+                showStatus('✅ Selections saved successfully!', 'success');
+                
+                // Show preview
+                showPreview();
+                
+            } catch (error) {
+                console.error('Error saving:', error);
+                showStatus('❌ Error saving to Firebase. Check console.', 'error');
+            }
+        }
+
+        // Show preview of selections
+        function showPreview() {
+            const preview = document.getElementById('preview-section');
+            preview.innerHTML = `
+                <div style="background: #f0f9f6; padding: 20px; border-radius: 12px; margin-top: 20px;">
+                    <h4><i class="fas fa-eye"></i> Preview - What will be displayed:</h4>
+                    
+                    <div style="margin-top: 15px;">
+                        <p><strong>📌 Quote of the Day:</strong><br>
+                        ${selections.quote ? `"${selections.quote.text}"${selections.quote.author ? `<br>— ${selections.quote.author}` : ''}` : 'Not selected'}</p>
+                        
+                        <p><strong>⚡ Motivation of the Day:</strong><br>
+                        ${selections.motivation ? `"${selections.motivation.text}"${selections.motivation.author ? `<br>— ${selections.motivation.author}` : ''}` : 'Not selected'}</p>
+                        
+                        <p><strong>🪶 Poem of the Day:</strong><br>
+                        ${selections.poem ? `"${selections.poem.text}"` : 'Not selected'}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            statusMsg.innerHTML = message;
+            statusMsg.className = `status-message ${type}`;
+            statusMsg.style.display = 'block';
+            
+            setTimeout(() => {
+                statusMsg.style.display = 'none';
+            }, 3000);
+        }
+
+        // Filter items
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderItems();
+            });
+        });
+
+        // Handle dropdown changes
+        selectedQuote.addEventListener('change', (e) => {
+            const item = allItems.find(i => i.id === e.target.value);
+            selections.quote = item || null;
+            renderItems();
+        });
+
+        selectedMotivation.addEventListener('change', (e) => {
+            const item = allItems.find(i => i.id === e.target.value);
+            selections.motivation = item || null;
+            renderItems();
+        });
+
+        selectedPoem.addEventListener('change', (e) => {
+            const item = allItems.find(i => i.id === e.target.value);
+            selections.poem = item || null;
+            renderItems();
+        });
+
+        // Save button
+        saveBtn.addEventListener('click', saveSelections);
+
+        // Initialize
+        loadItems();
+
+    </script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .admin-header {
+            background: linear-gradient(135deg, #004d40, #00796b);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .admin-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .admin-header h1 i {
+            margin-right: 10px;
+            color: #c49a6c;
+        }
+
+        .admin-header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .admin-container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+        }
+
+        /* Selection Panel */
+        .selection-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            height: fit-content;
+            position: sticky;
+            top: 2rem;
+        }
+
+        .selection-panel h2 {
+            color: #004d40;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #e4f0ec;
+            padding-bottom: 0.5rem;
+        }
+
+        .selection-item {
+            margin-bottom: 1.5rem;
+        }
+
+        .selection-item label {
+            display: block;
+            font-weight: 600;
+            color: #1e5e58;
+            margin-bottom: 0.5rem;
+        }
+
+        .selection-item select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #e4f0ec;
+            border-radius: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .selection-item select:hover {
+            border-color: #c49a6c;
+        }
+
+        .selection-item select:focus {
+            outline: none;
+            border-color: #00796b;
+        }
+
+        .save-btn {
+            width: 100%;
+            background: #004d40;
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 1rem 0;
+        }
+
+        .save-btn:hover {
+            background: #00796b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,77,64,0.2);
+        }
+
+        .status-message {
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .status-message.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        /* Items Panel */
+        .items-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.6rem 1.5rem;
+            border: 2px solid #e4f0ec;
+            background: white;
+            border-radius: 30px;
+            font-weight: 600;
+            color: #1e5e58;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover {
+            border-color: #c49a6c;
+        }
+
+        .filter-btn.active {
+            background: #004d40;
+            color: white;
+            border-color: #004d40;
+        }
+
+        .items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .item-card {
+            background: #f8faf9;
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .item-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+            border-color: #c49a6c;
+        }
+
+        .item-card.selected {
+            border-color: #00796b;
+            background: #f0f9f6;
+        }
+
+        .item-card.selected::before {
+            content: '✓';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 24px;
+            height: 24px;
+            background: #00796b;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .item-type {
+            display: inline-block;
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .item-type.quote {
+            background: #e3f2fd;
+            color: #0d47a1;
+        }
+
+        .item-type.motivation {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .item-type.poem {
+            background: #f3e5f5;
+            color: #4a148c;
+        }
+
+        .item-title {
+            font-size: 1.3rem;
+            color: #004d40;
+            margin-bottom: 0.5rem;
+        }
+
+        .item-text {
+            color: #2c3e4f;
+            font-style: italic;
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .item-author {
+            color: #6b8a84;
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+        }
+
+        .item-actions {
+            margin-top: 1rem;
+        }
+
+        .select-btn {
+            width: 100%;
+            padding: 0.6rem;
+            background: white;
+            border: 2px solid #00796b;
+            color: #00796b;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .select-btn:hover {
+            background: #00796b;
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #8aa39e;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        #preview-section {
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .admin-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .selection-panel {
+                position: static;
+            }
+            
+            .admin-header h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-header">
+        <h1><i class="fas fa-crown"></i> Josh Inspirovia · Admin Panel</h1>
+        <p>Select which items become Quote, Motivation, and Poem of the day</p>
+    </div>
+
+    <div class="admin-container">
+        <!-- Selection Panel (Left Side) -->
+        <div class="selection-panel">
+            <h2><i class="fas fa-sliders-h"></i> Current Selection</h2>
+            
+            <div class="selection-item">
+                <label><i class="fas fa-quote-right" style="color: #0d47a1;"></i> Quote of the Day</label>
+                <select id="selected-quote">
+                    <option value="">Select a quote...</option>
+                </select>
+            </div>
+
+            <div class="selection-item">
+                <label><i class="fas fa-bolt" style="color: #e65100;"></i> Motivation of the Day</label>
+                <select id="selected-motivation">
+                    <option value="">Select motivation...</option>
+                </select>
+            </div>
+
+            <div class="selection-item">
+                <label><i class="fas fa-feather-alt" style="color: #4a148c;"></i> Poem of the Day</label>
+                <select id="selected-poem">
+                    <option value="">Select a poem...</option>
+                </select>
+            </div>
+
+            <button class="save-btn" id="save-selection">
+                <i class="fas fa-save"></i> Save Selection
+            </button>
+
+            <div id="status-message" class="status-message"></div>
+            
+            <div id="preview-section"></div>
+        </div>
+
+        <!-- Items Panel (Right Side) -->
+        <div class="items-panel">
+            <div class="filter-bar">
+                <button class="filter-btn active" data-filter="all">All Items</button>
+                <button class="filter-btn" data-filter="quote">Quotes</button>
+                <button class="filter-btn" data-filter="motivation">Motivation</button>
+                <button class="filter-btn" data-filter="poem">Poems</button>
+            </div>
+
+            <div id="items-container" class="items-grid">
+                <!-- Items will be loaded here -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>
