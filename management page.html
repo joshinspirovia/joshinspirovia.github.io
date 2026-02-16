@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Featured · Josh Inspirovia</title>
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <!-- Google Fonts: Inter & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { 
+      getFirestore, collection, query, getDocs, 
+      doc, deleteDoc, updateDoc, orderBy, serverTimestamp 
+    } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCyEA4LKyZWc9EfPuI0m_1cQNumWsU1Tvw",
+      authDomain: "josh-inspirovia.firebaseapp.com",
+      projectId: "josh-inspirovia",
+      storageBucket: "josh-inspirovia.firebasestorage.app",
+      messagingSenderId: "551356397320",
+      appId: "1:551356397320:web:1a208800332a23be859ebd"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    // DOM elements
+    const loginSection = document.getElementById('loginSection');
+    const adminPanel = document.getElementById('adminPanel');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const loginError = document.getElementById('loginError');
+    const featuredContainer = document.getElementById('featured-items-container');
+    const editModal = document.getElementById('editModal');
+    const closeModal = document.getElementById('closeModal');
+    const cancelEdit = document.getElementById('cancelEdit');
+    const editForm = document.getElementById('editForm');
+    const modalTitle = document.getElementById('modalTitle');
+    const editId = document.getElementById('editId');
+    const editTitle = document.getElementById('editTitle');
+    const editType = document.getElementById('editType');
+    const editText = document.getElementById('editText');
+    const saveMessage = document.getElementById('saveMessage');
+
+    let featuredItems = [];
+    let currentEditId = null;
+
+    // Check authentication
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loginSection.classList.add('hidden');
+        adminPanel.classList.remove('hidden');
+        loadFeaturedItems();
+      } else {
+        loginSection.classList.remove('hidden');
+        adminPanel.classList.add('hidden');
+      }
+    });
+
+    // Login handler
+    loginBtn.addEventListener('click', async () => {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      loginError.textContent = '';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (error) {
+        loginError.textContent = 'Login failed: ' + error.message;
+      }
+    });
+
+    // Logout
+    logoutBtn.addEventListener('click', () => {
+      signOut(auth);
+    });
+
+    // Load featured items
+    async function loadFeaturedItems() {
+      try {
+        const q = query(collection(db, 'featured'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        featuredItems = [];
+        querySnapshot.forEach((doc) => {
+          featuredItems.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        renderFeaturedItems();
+      } catch (error) {
+        console.error('Error loading:', error);
+        showMessage('Error loading items: ' + error.message, 'error');
+      }
+    }
+
+    // Render featured items
+    function renderFeaturedItems() {
+      if (featuredItems.length === 0) {
+        featuredContainer.innerHTML = `
+          <div class="no-items">
+            <i class="fas fa-inbox"></i>
+            <p>No featured items found</p>
+            <a href="admin-featured-add.html" class="btn btn-small" style="margin-top: 1rem;">
+              <i class="fas fa-plus"></i> Add New Item
+            </a>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      featuredItems.forEach((item) => {
+        // Format date
+        let dateStr = 'Unknown date';
+        if (item.createdAt && item.createdAt.seconds) {
+          const date = new Date(item.createdAt.seconds * 1000);
+          dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        html += `
+          <div class="featured-item" data-id="${item.id}">
+            <div class="featured-item-header">
+              <div class="featured-item-info">
+                <span class="featured-item-type ${item.type}">
+                  <i class="fas ${getTypeIcon(item.type)}"></i> ${item.type}
+                </span>
+                <span class="featured-item-date">
+                  <i class="far fa-calendar-alt"></i> ${dateStr}
+                </span>
+              </div>
+              <div class="featured-item-actions">
+                <button class="action-btn edit-btn" onclick="editItem('${item.id}')">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="action-btn delete-btn" onclick="deleteItem('${item.id}')">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            </div>
+            <h3 class="featured-item-title">${escapeHtml(item.title || 'Untitled')}</h3>
+            <p class="featured-item-text">${escapeHtml(item.text || '')}</p>
+            <div class="featured-item-footer">
+              <span class="featured-item-id">ID: ${item.id}</span>
+            </div>
+          </div>
+        `;
+      });
+      
+      featuredContainer.innerHTML = html;
+
+      // Attach event listeners
+      window.editItem = editItem;
+      window.deleteItem = deleteItem;
+    }
+
+    // Helper: escape HTML
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Get icon for type
+    function getTypeIcon(type) {
+      switch(type) {
+        case 'quote': return 'fa-quote-right';
+        case 'motivation': return 'fa-bolt';
+        case 'poem': return 'fa-feather-alt';
+        default: return 'fa-crown';
+      }
+    }
+
+    // Delete item
+    window.deleteItem = async function(id) {
+      if (!confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+        return;
+      }
+
+      try {
+        await deleteDoc(doc(db, 'featured', id));
+        featuredItems = featuredItems.filter(item => item.id !== id);
+        renderFeaturedItems();
+        showMessage('Item deleted successfully', 'success');
+      } catch (error) {
+        console.error('Error deleting:', error);
+        showMessage('Error deleting item: ' + error.message, 'error');
+      }
+    };
+
+    // Edit item - open modal
+    window.editItem = function(id) {
+      const item = featuredItems.find(i => i.id === id);
+      if (!item) return;
+
+      currentEditId = id;
+      editId.value = id;
+      editTitle.value = item.title || '';
+      editType.value = item.type || 'quote';
+      editText.value = item.text || '';
+      
+      modalTitle.textContent = 'Edit Featured Item';
+      editModal.style.display = 'flex';
+    };
+
+    // Close modal
+    function closeEditModal() {
+      editModal.style.display = 'none';
+      currentEditId = null;
+      editForm.reset();
+    }
+
+    closeModal.addEventListener('click', closeEditModal);
+    cancelEdit.addEventListener('click', closeEditModal);
+
+    // Click outside to close
+    window.addEventListener('click', (e) => {
+      if (e.target === editModal) {
+        closeEditModal();
+      }
+    });
+
+    // Save edit
+    editForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!currentEditId) return;
+
+      const title = editTitle.value.trim();
+      const type = editType.value;
+      const text = editText.value.trim();
+
+      if (!title || !type || !text) {
+        showMessage('All fields are required', 'error');
+        return;
+      }
+
+      try {
+        const itemRef = doc(db, 'featured', currentEditId);
+        await updateDoc(itemRef, {
+          title,
+          type,
+          text,
+          updatedAt: serverTimestamp()
+        });
+
+        // Update local data
+        const index = featuredItems.findIndex(i => i.id === currentEditId);
+        if (index !== -1) {
+          featuredItems[index] = {
+            ...featuredItems[index],
+            title,
+            type,
+            text
+          };
+        }
+
+        renderFeaturedItems();
+        closeEditModal();
+        showMessage('Item updated successfully', 'success');
+      } catch (error) {
+        console.error('Error updating:', error);
+        showMessage('Error updating item: ' + error.message, 'error');
+      }
+    });
+
+    // Show message
+    function showMessage(text, type) {
+      saveMessage.textContent = text;
+      saveMessage.className = `save-message ${type}`;
+      saveMessage.style.display = 'block';
+      
+      setTimeout(() => {
+        saveMessage.style.display = 'none';
+      }, 3000);
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f0f5f4;
+      color: #153b3a;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2.8rem;
+      color: #004d40;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 0.5rem;
+    }
+
+    h1 i {
+      color: #c49a6c;
+    }
+
+    .subhead {
+      font-size: 1.2rem;
+      margin-bottom: 2rem;
+      border-left: 5px solid #c49a6c;
+      padding-left: 1rem;
+      color: #2f5e5b;
+    }
+
+    /* Login Card */
+    .login-card {
+      background: white;
+      border-radius: 40px;
+      padding: 2.5rem;
+      max-width: 450px;
+      margin: 3rem auto;
+      box-shadow: 0 25px 40px -15px #1e4a4a80;
+      border: 1px solid #c49a6c30;
+    }
+
+    .login-card h2 {
+      font-size: 2rem;
+      margin-bottom: 1.5rem;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .input-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .input-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      color: #0f4a47;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 1rem;
+      border: 2px solid #d0dfdc;
+      border-radius: 60px;
+      font-size: 1rem;
+      transition: 0.2s;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #c49a6c;
+    }
+
+    .btn {
+      background: #004d40;
+      color: white;
+      border: none;
+      padding: 1rem 2.5rem;
+      border-radius: 60px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: 0.2s;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      background: #0b6b5e;
+      transform: scale(1.02);
+    }
+
+    .btn-small {
+      padding: 0.6rem 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 2px solid #004d40;
+      color: #004d40;
+    }
+
+    .btn-outline:hover {
+      background: #e0f0ec;
+      transform: none;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+    }
+
+    .btn-danger:hover {
+      background: #bb2d3b;
+    }
+
+    .error-message {
+      color: #b02e2e;
+      margin-top: 1rem;
+      font-weight: 500;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Admin Header */
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2.5rem;
+      flex-wrap: wrap;
+    }
+
+    .admin-actions {
+      display: flex;
+      gap: 1rem;
+    }
+
+    /* Featured Items Container */
+    .featured-items-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+
+    .featured-item {
+      background: white;
+      border-radius: 28px;
+      padding: 2rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 50, 40, 0.08);
+      border: 1px solid rgba(0, 121, 107, 0.1);
+      transition: all 0.25s ease;
+    }
+
+    .featured-item:hover {
+      box-shadow: 0 15px 30px -12px rgba(0, 100, 80, 0.18);
+      border-color: #c49a6c;
+    }
+
+    .featured-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .featured-item-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .featured-item-type {
+      padding: 0.4rem 1.2rem;
+      border-radius: 40px;
+      font-weight: 600;
+      text-transform: capitalize;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .featured-item-type.quote {
+      background: #e3f2fd;
+      color: #0d47a1;
+    }
+
+    .featured-item-type.motivation {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .featured-item-type.poem {
+      background: #f3e5f5;
+      color: #4a148c;
+    }
+
+    .featured-item-date {
+      color: #6b8a84;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: #f0f7f5;
+      padding: 0.3rem 1rem;
+      border-radius: 40px;
+    }
+
+    .featured-item-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .action-btn {
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0.5rem;
+      border-radius: 50%;
+      transition: 0.2s;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .edit-btn {
+      color: #0d47a1;
+      background: #e3f2fd;
+    }
+
+    .edit-btn:hover {
+      background: #bbdefb;
+    }
+
+    .delete-btn {
+      color: #b02e2e;
+      background: #ffe1de;
+    }
+
+    .delete-btn:hover {
+      background: #ffc9c4;
+    }
+
+    .featured-item-title {
+      font-size: 1.8rem;
+      font-family: 'Space Grotesk', sans-serif;
+      color: #004d40;
+      margin-bottom: 1rem;
+    }
+
+    .featured-item-text {
+      color: #2c3e4f;
+      line-height: 1.8;
+      margin-bottom: 1.5rem;
+      font-size: 1.1rem;
+      padding-left: 1rem;
+      border-left: 3px solid #c49a6c;
+    }
+
+    .featured-item-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: #8aa39e;
+      border-top: 1px dashed #e4f0ec;
+      padding-top: 1rem;
+    }
+
+    .featured-item-id {
+      font-family: monospace;
+      background: #f0f7f5;
+      padding: 0.3rem 0.8rem;
+      border-radius: 20px;
+    }
+
+    /* No Items */
+    .no-items {
+      text-align: center;
+      color: #6b8a84;
+      font-style: italic;
+      padding: 4rem 2rem;
+      background: white;
+      border-radius: 40px;
+      border: 2px dashed #e4f0ec;
+    }
+
+    .no-items i {
+      font-size: 3rem;
+      color: #c49a6c;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(5px);
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 40px;
+      padding: 2.5rem;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .modal-header h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      color: #004d40;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 2rem;
+      cursor: pointer;
+      color: #6b8a84;
+      transition: 0.2s;
+    }
+
+    .close-btn:hover {
+      color: #b02e2e;
+    }
+
+    /* Form Fields */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .field label {
+      font-weight: 600;
+      color: #1e5e58;
+      font-size: 1rem;
+    }
+
+    .field input, .field textarea, .field select {
+      padding: 1rem;
+      border: 2px solid #dae9e5;
+      border-radius: 24px;
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+    }
+
+    .field textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    .field input:focus, .field textarea:focus, .field select:focus {
+      outline: none;
+      border-color: #c49a6c;
+    }
+
+    /* Save Message */
+    .save-message {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 60px;
+      text-align: center;
+      font-weight: 600;
+      display: none;
+    }
+
+    .save-message.success {
+      background: #c8f0e4;
+      color: #005f4e;
+    }
+
+    .save-message.error {
+      background: #ffe1de;
+      color: #aa3030;
+    }
+
+    /* Modal Buttons */
+    .modal-buttons {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .modal-buttons button {
+      flex: 1;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: #5f7e7a;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      body { padding: 1rem; }
+      
+      h1 { font-size: 2rem; }
+      
+      .featured-item-header {
+        flex-direction: column;
+      }
+      
+      .featured-item-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      
+      .modal-content {
+        padding: 1.5rem;
+      }
+    }
+
+    
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      <i class="fas fa-crown"></i> Manage Featured Content
+    </h1>
+    <div class="subhead">Edit or delete existing featured items</div>
+
+    <!-- LOGIN SECTION -->
+    <div id="loginSection" class="login-card">
+      <h2><i class="fas fa-lock"></i> Admin Access</h2>
+      <div class="input-group">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="josh@inspirovia.com" value="josh@inspirovia.com" />
+      </div>
+      <div class="input-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" />
+      </div>
+      <button class="btn" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Login</button>
+      <div id="loginError" class="error-message"></div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div id="adminPanel" class="hidden">
+      <div class="admin-header">
+        <span style="font-size: 1.3rem; background: #ebf7f3; padding: 0.6rem 2rem; border-radius: 60px;">
+          <i class="fas fa-user-check" style="color: #00796b;"></i> Admin
+        </span>
+        <div class="admin-actions">
+          <a href="admin.html" class="btn btn-outline btn-small">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+          </a>
+          <a href="admin-featured-add.html" class="btn btn-small">
+            <i class="fas fa-plus"></i> Add New
+          </a>
+          <button class="btn-outline btn-small" id="logoutBtn">
+            <i class="fas fa-sign-out-alt"></i> Logout
+          </button>
+        </div>
+      </div>
+
+      <!-- Featured Items List -->
+      <div id="featured-items-container" class="featured-items-container">
+        <!-- Items will be loaded here -->
+      </div>
+
+      <!-- Save Message -->
+      <div id="saveMessage" class="save-message"></div>
+    </div>
+
+    <footer>
+      <p>© 2025 Josh Inspirovia — Manage Featured Content</p>
+    </footer>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="editModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Edit Featured Item</h2>
+        <button class="close-btn" id="closeModal">&times;</button>
+      </div>
+
+      <form id="editForm">
+        <input type="hidden" id="editId" />
+
+        <div class="field">
+          <label><i class="fas fa-heading"></i> Title</label>
+          <input type="text" id="editTitle" placeholder="Enter title" required />
+        </div>
+
+        <div class="field">
+          <label><i class="fas fa-tag"></i> Type</label>
+          <select id="editType" required>
+            <option value="quote">Quote</option>
+            <option value="motivation">Motivation</option>
+            <option value="poem">Poem</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label><i class="fas fa-paragraph"></i> Content</label>
+          <textarea id="editText" placeholder="Enter content..." required></textarea>
+        </div>
+
+        <div class="modal-buttons">
+          <button type="submit" class="btn">
+            <i class="fas fa-save"></i> Save Changes
+          </button>
+          <button type="button" class="btn btn-outline" id="cancelEdit">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
