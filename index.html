@@ -370,6 +370,35 @@
       }
     });
   </script>
+  <!-- Add this script right after your Firebase initialization and before any other code -->
+<script>
+  // SECRET KEYBOARD COMBO FOR ADMIN ACCESS
+  (function() {
+    const secretCode = 'blessing12mensah';
+    let input = '';
+    
+    document.addEventListener('keydown', function(e) {
+      // Convert key to lowercase for case-insensitive matching
+      const key = e.key.toLowerCase();
+      
+      // Only track letters and numbers
+      if (key.length === 1 && /[a-z0-9]/.test(key)) {
+        input += key;
+        
+        // Keep only the last N characters where N is the secret length
+        if (input.length > secretCode.length) {
+          input = input.slice(-secretCode.length);
+        }
+        
+        // Check if the input matches the secret code
+        if (input === secretCode) {
+          // Redirect to admin.html
+          window.location.href = 'admin.html';
+        }
+      }
+    });
+  })();
+</script>
   <style>
     /* ----- RESET & BASE ----- */
     * {
@@ -1065,7 +1094,7 @@ body {
   </section>
 
   <footer>
-    <p>&copy; 2025 Josh Inspirovia. All rights reserved. — live from Firebase</p>
+    <p>&copy; 2026 Josh Inspirovia. All rights reserved. — live from Firebase</p>
   </footer>
 </body>
 </html>
